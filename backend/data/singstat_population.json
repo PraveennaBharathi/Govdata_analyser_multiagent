@@ -1,0 +1,75 @@
+{
+  "metadata": {
+    "source": "DOS SingStat - Singapore Department of Statistics",
+    "dataset": "Population and Demographics",
+    "last_updated": "2024-12-31",
+    "description": "Population statistics by age group and employment status"
+  },
+  "data": [
+    {
+      "year": 2020,
+      "total_population": 5685800,
+      "working_age_population": 3850000,
+      "employment_rate": 66.2,
+      "unemployment_rate": 3.0,
+      "age_groups": {
+        "15-24": {"population": 520000, "employed": 280000, "unemployed": 15000},
+        "25-54": {"population": 2450000, "employed": 2200000, "unemployed": 45000},
+        "55-64": {"population": 680000, "employed": 520000, "unemployed": 12000},
+        "65+": {"population": 200000, "employed": 85000, "unemployed": 3000}
+      }
+    },
+    {
+      "year": 2021,
+      "total_population": 5704000,
+      "working_age_population": 3875000,
+      "employment_rate": 67.1,
+      "unemployment_rate": 2.7,
+      "age_groups": {
+        "15-24": {"population": 515000, "employed": 295000, "unemployed": 12000},
+        "25-54": {"population": 2470000, "employed": 2250000, "unemployed": 38000},
+        "55-64": {"population": 690000, "employed": 535000, "unemployed": 10000},
+        "65+": {"population": 200000, "employed": 90000, "unemployed": 2500}
+      }
+    },
+    {
+      "year": 2022,
+      "total_population": 5637000,
+      "working_age_population": 3890000,
+      "employment_rate": 68.5,
+      "unemployment_rate": 2.1,
+      "age_groups": {
+        "15-24": {"population": 510000, "employed": 310000, "unemployed": 8000},
+        "25-54": {"population": 2480000, "employed": 2300000, "unemployed": 28000},
+        "55-64": {"population": 700000, "employed": 555000, "unemployed": 8000},
+        "65+": {"population": 200000, "employed": 95000, "unemployed": 2000}
+      }
+    },
+    {
+      "year": 2023,
+      "total_population": 5920000,
+      "working_age_population": 3920000,
+      "employment_rate": 69.2,
+      "unemployment_rate": 1.9,
+      "age_groups": {
+        "15-24": {"population": 505000, "employed": 325000, "unemployed": 7000},
+        "25-54": {"population": 2490000, "employed": 2350000, "unemployed": 25000},
+        "55-64": {"population": 720000, "employed": 575000, "unemployed": 7000},
+        "65+": {"population": 205000, "employed": 100000, "unemployed": 1800}
+      }
+    },
+    {
+      "year": 2024,
+      "total_population": 5988000,
+      "working_age_population": 3950000,
+      "employment_rate": 69.8,
+      "unemployment_rate": 1.8,
+      "age_groups": {
+        "15-24": {"population": 500000, "employed": 335000, "unemployed": 6500},
+        "25-54": {"population": 2500000, "employed": 2380000, "unemployed": 23000},
+        "55-64": {"population": 740000, "employed": 595000, "unemployed": 6500},
+        "65+": {"population": 210000, "employed": 105000, "unemployed": 1700}
+      }
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+year,sector,subsector,employment_count,employment_change,source
+2020,Manufacturing,Electronics,125000,2.1,data.gov.sg
+2020,Manufacturing,Biomedical,85000,3.5,data.gov.sg
+2020,Manufacturing,Precision Engineering,95000,1.8,data.gov.sg
+2020,Manufacturing,Chemicals,75000,2.3,data.gov.sg
+2020,Manufacturing,Food & Beverage,70000,1.2,data.gov.sg
+2020,Services,Financial Services,185000,4.2,data.gov.sg
+2020,Services,Information & Communications,165000,6.8,data.gov.sg
+2020,Services,Professional Services,145000,3.1,data.gov.sg
+2020,Services,Healthcare,195000,4.5,data.gov.sg
+2020,Services,Education,175000,2.8,data.gov.sg
+2020,Services,Retail,285000,0.5,data.gov.sg
+2020,Services,F&B Services,195000,-2.1,data.gov.sg
+2020,Construction,Building Construction,145000,-1.5,data.gov.sg
+2020,Construction,Civil Engineering,85000,1.2,data.gov.sg
+2020,Construction,Specialty Trade,50000,0.8,data.gov.sg
+2021,Manufacturing,Electronics,130000,4.0,data.gov.sg
+2021,Manufacturing,Biomedical,90000,5.9,data.gov.sg
+2021,Manufacturing,Precision Engineering,98000,3.2,data.gov.sg
+2021,Manufacturing,Chemicals,78000,4.0,data.gov.sg
+2021,Manufacturing,Food & Beverage,72000,2.9,data.gov.sg
+2021,Services,Financial Services,195000,5.4,data.gov.sg
+2021,Services,Information & Communications,180000,9.1,data.gov.sg
+2021,Services,Professional Services,155000,6.9,data.gov.sg
+2021,Services,Healthcare,210000,7.7,data.gov.sg
+2021,Services,Education,182000,4.0,data.gov.sg
+2021,Services,Retail,295000,3.5,data.gov.sg
+2021,Services,F&B Services,205000,5.1,data.gov.sg
+2021,Construction,Building Construction,155000,6.9,data.gov.sg
+2021,Construction,Civil Engineering,92000,8.2,data.gov.sg
+2021,Construction,Specialty Trade,53000,6.0,data.gov.sg
+2022,Manufacturing,Electronics,138000,6.2,data.gov.sg
+2022,Manufacturing,Biomedical,96000,6.7,data.gov.sg
+2022,Manufacturing,Precision Engineering,103000,5.1,data.gov.sg
+2022,Manufacturing,Chemicals,82000,5.1,data.gov.sg
+2022,Manufacturing,Food & Beverage,75000,4.2,data.gov.sg
+2022,Services,Financial Services,208000,6.7,data.gov.sg
+2022,Services,Information & Communications,198000,10.0,data.gov.sg
+2022,Services,Professional Services,168000,8.4,data.gov.sg
+2022,Services,Healthcare,228000,8.6,data.gov.sg
+2022,Services,Education,190000,4.4,data.gov.sg
+2022,Services,Retail,310000,5.1,data.gov.sg
+2022,Services,F&B Services,225000,9.8,data.gov.sg
+2022,Construction,Building Construction,168000,8.4,data.gov.sg
+2022,Construction,Civil Engineering,102000,10.9,data.gov.sg
+2022,Construction,Specialty Trade,58000,9.4,data.gov.sg
+2023,Manufacturing,Electronics,145000,5.1,data.gov.sg
+2023,Manufacturing,Biomedical,102000,6.3,data.gov.sg
+2023,Manufacturing,Precision Engineering,108000,4.9,data.gov.sg
+2023,Manufacturing,Chemicals,86000,4.9,data.gov.sg
+2023,Manufacturing,Food & Beverage,78000,4.0,data.gov.sg
+2023,Services,Financial Services,220000,5.8,data.gov.sg
+2023,Services,Information & Communications,215000,8.6,data.gov.sg
+2023,Services,Professional Services,182000,8.3,data.gov.sg
+2023,Services,Healthcare,245000,7.5,data.gov.sg
+2023,Services,Education,198000,4.2,data.gov.sg
+2023,Services,Retail,325000,4.8,data.gov.sg
+2023,Services,F&B Services,242000,7.6,data.gov.sg
+2023,Construction,Building Construction,180000,7.1,data.gov.sg
+2023,Construction,Civil Engineering,112000,9.8,data.gov.sg
+2023,Construction,Specialty Trade,63000,8.6,data.gov.sg
+2024,Manufacturing,Electronics,152000,4.8,data.gov.sg
+2024,Manufacturing,Biomedical,108000,5.9,data.gov.sg
+2024,Manufacturing,Precision Engineering,113000,4.6,data.gov.sg
+2024,Manufacturing,Chemicals,90000,4.7,data.gov.sg
+2024,Manufacturing,Food & Beverage,82000,5.1,data.gov.sg
+2024,Services,Financial Services,232000,5.5,data.gov.sg
+2024,Services,Information & Communications,232000,7.9,data.gov.sg
+2024,Services,Professional Services,196000,7.7,data.gov.sg
+2024,Services,Healthcare,262000,6.9,data.gov.sg
+2024,Services,Education,206000,4.0,data.gov.sg
+2024,Services,Retail,340000,4.6,data.gov.sg
+2024,Services,F&B Services,258000,6.6,data.gov.sg
+2024,Construction,Building Construction,192000,6.7,data.gov.sg
+2024,Construction,Civil Engineering,122000,8.9,data.gov.sg
+2024,Construction,Specialty Trade,68000,7.9,data.gov.sg
