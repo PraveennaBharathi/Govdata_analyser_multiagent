@@ -1,5 +1,6 @@
 from typing import Dict, Any, List
 import logging
+import time
 from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
 from services.llm_service import LLMService
@@ -19,6 +20,7 @@ class AgentState(BaseModel):
     analysis_result: Dict[str, Any] = {}
     result: Dict[str, Any] = {}
     status: str = "pending"
+    node_timings: Dict[str, float] = {}
 
 class CoordinatorAgent:
     """Coordinator Agent for planning and managing analysis workflows"""
@@ -52,8 +54,9 @@ class CoordinatorAgent:
     
     async def _parse_query(self, state: AgentState) -> AgentState:
         """Parse user query into structured format"""
+        t0 = time.time()
         logger.info(f"Parsing query: {state.user_query}")
-        
+
         try:
             parsed = await self.llm_service.parse_query(state.user_query)
             state.parsed_query = parsed
@@ -66,115 +69,119 @@ class CoordinatorAgent:
                 "year_range": "2020-2024",
                 "analysis": "trend"
             }
-        
+
+        state.node_timings["parse_query"] = round((time.time() - t0) * 1000)
         return state
     
     async def _create_analysis_plan(self, state: AgentState) -> AgentState:
         """Create analysis plan based on parsed query"""
+        t0 = time.time()
         logger.info("Creating analysis plan")
-        
+
         dataset = state.parsed_query.get("dataset", "employment")
         analysis_type = state.parsed_query.get("analysis", "trend")
         year_range = state.parsed_query.get("year_range", "2020-2024")
-        
-        # Simple planning logic
+
         plan = [
             f"Extract {dataset} data for {year_range}",
             f"Perform {analysis_type} analysis",
             "Generate insights and visualizations",
             "Create structured report"
         ]
-        
+
         state.analysis_plan = plan
         state.current_step = "plan_created"
         logger.info(f"Analysis plan created: {plan}")
-        
+
+        state.node_timings["create_plan"] = round((time.time() - t0) * 1000)
         return state
     
     async def _extract_data(self, state: AgentState) -> AgentState:
-        """Extract data using Extraction Agent"""
-        logger.info("Extracting data")
-        
-        # Check if requested dataset is supported
-        requested_dataset = state.parsed_query.get("dataset", "employment")
-        supported_datasets = ["employment", "labor", "workforce", "jobs"]
-        
-        if requested_dataset not in supported_datasets and requested_dataset != "employment":
-            # User asked for unsupported data (GDP, economy, etc.)
-            logger.warning(f"Unsupported dataset requested: {requested_dataset}")
-            state.extracted_data = []
-            state.data_info = {
-                "unsupported_dataset": requested_dataset,
-                "available_datasets": ["employment", "labor force", "workforce statistics"]
-            }
-            state.current_step = "unsupported_dataset"
-            return state
-        
+        """Extract data — routes by domain (labour / housing)."""
+        t0 = time.time()
+        domain = state.parsed_query.get("domain", "labour")
+        dataset = state.parsed_query.get("dataset", "employment_trends")
+        filters = state.parsed_query.get("filters", {})
+        logger.info(f"Extracting data: domain={domain} dataset={dataset}")
+
         try:
-            # Extract employment data
-            extraction_result = self.extraction_agent.load_employment_data()
-            
-            if extraction_result["status"] == "success":
-                state.extracted_data = extraction_result["data"]
-                state.data_info = extraction_result.get("data_info", {})
+            if domain == "housing":
+                result = self.extraction_agent.load_hdb_data(filters=filters)
+            elif domain == "cross_domain":
+                # Cross-domain analytics handles its own extraction internally
+                state.extracted_data = []
+                state.data_info = {"note": "cross_domain_self_loads"}
                 state.current_step = "data_extracted"
-                logger.info(f"Data extracted: {len(state.extracted_data)} records")
+                state.node_timings["extract_data"] = round((time.time() - t0) * 1000)
+                return state
             else:
-                logger.error(f"Data extraction failed: {extraction_result.get('error')}")
+                # All labour / unknown queries use the composite live dataset
+                result = self.extraction_agent.load_labour_market_data()
+
+            if result["status"] == "success":
+                state.extracted_data = result["data"]
+                state.data_info = result.get("data_info", {})
+                state.current_step = "data_extracted"
+                logger.info(f"Extracted {len(state.extracted_data)} records [{domain}/{dataset}]")
+            else:
+                logger.error(f"Extraction failed: {result.get('error')}")
                 state.extracted_data = []
                 state.data_info = {}
                 state.current_step = "extraction_failed"
-                
+
         except Exception as e:
             logger.error(f"Data extraction error: {e}")
+            import traceback; logger.error(traceback.format_exc())
             state.extracted_data = []
             state.data_info = {}
             state.current_step = "extraction_failed"
-        
+
+        state.node_timings["extract_data"] = round((time.time() - t0) * 1000)
         return state
     
     async def _analyze_data(self, state: AgentState) -> AgentState:
         """Analyze data using Analytics Agent"""
+        t0 = time.time()
         logger.info("Analyzing data")
-        
-        # Check if we have an unsupported dataset request
-        if state.current_step == "unsupported_dataset":
-            requested = state.data_info.get("unsupported_dataset", "unknown")
-            available = state.data_info.get("available_datasets", [])
-            
-            state.analysis_result = {
-                "status": "unsupported",
-                "conversational_response": f"I apologize, but I currently only have access to employment and workforce data from Singapore government sources (data.gov.sg, MOM, and SingStat). I cannot analyze {requested} data such as GDP, economic indicators, or other macroeconomic metrics at this time.\n\nHowever, I can help you analyze:\n- Employment trends across sectors (Construction, Manufacturing, Services)\n- Workforce statistics and labor force data\n- Year-over-year employment growth patterns\n- Sector-specific employment analysis\n\nWould you like me to analyze employment trends instead? You can ask questions like:\n- 'Analyze employment trends from 2020 to 2024'\n- 'Compare unemployment rates across different sectors'\n- 'Show me workforce growth patterns'",
-                "summary_statistics": {},
-                "insights": [f"System currently supports employment data only, not {requested} data"],
-                "yearly_trends": [],
-                "sector_trends": []
-            }
-            state.current_step = "analysis_completed"
-            return state
-        
-        if not state.extracted_data:
+
+        domain = state.parsed_query.get("domain", "labour")
+
+        if not state.extracted_data and domain != "cross_domain":
             logger.warning("No data to analyze")
-            state.analysis_result = {"status": "error", "error": "No data available"}
+            state.analysis_result = {"status": "error", "error": "No data available for the requested query."}
             state.current_step = "analysis_failed"
+            state.node_timings["analyze_data"] = round((time.time() - t0) * 1000)
             return state
-        
+
         try:
-            # Perform trend analysis
-            analysis_result = await self.analytics_agent.analyze_employment_trends(state.extracted_data)
+            if domain == "housing":
+                analysis_result = await self.analytics_agent.analyze_hdb_data(
+                    state.extracted_data, state.parsed_query
+                )
+            elif domain == "cross_domain":
+                parsed_with_query = {**state.parsed_query, "user_query": state.user_query}
+                analysis_result = await self.analytics_agent.analyze_cross_domain(parsed_with_query)
+            else:
+                analysis_result = await self.analytics_agent.analyze_labour_market(
+                    state.extracted_data, state.parsed_query
+                )
+
             state.analysis_result = analysis_result
             state.current_step = "analysis_completed"
-            logger.info("Data analysis completed")
-            
+            logger.info(f"Analysis completed [{domain}]")
+
         except Exception as e:
             logger.error(f"Data analysis error: {e}")
+            import traceback; logger.error(traceback.format_exc())
             state.analysis_result = {"status": "error", "error": str(e)}
             state.current_step = "analysis_failed"
-        
+
+        state.node_timings["analyze_data"] = round((time.time() - t0) * 1000)
         return state
     
     async def _generate_final_result(self, state: AgentState) -> AgentState:
         """Generate final result combining all outputs"""
+        t0 = time.time()
         logger.info("Generating final result")
         
         # Extract conversational response for prominent display
@@ -215,43 +222,57 @@ class CoordinatorAgent:
             "status": "completed" if state.analysis_result.get("status") == "success" else "failed"
         }
         
+        state.node_timings["generate_final_result"] = round((time.time() - t0) * 1000)
         state.status = state.result["status"]
         state.current_step = "completed"
-        
+
         return state
     
     async def process_query(self, user_query: str) -> Dict[str, Any]:
         """Process user query through the agent workflow"""
         logger.info(f"Processing query: {user_query}")
-        
+
         initial_state = AgentState(user_query=user_query)
-        
+
+        NODE_META = {
+            "parse_query":            {"label": "Parse Query",           "icon": "brain"},
+            "create_plan":            {"label": "Create Analysis Plan",  "icon": "list"},
+            "extract_data":           {"label": "Extract Data",          "icon": "database"},
+            "analyze_data":           {"label": "Analyze Data",          "icon": "chart"},
+            "generate_final_result":  {"label": "Generate Report",       "icon": "file"},
+        }
+
         try:
-            # Execute the workflow
             final_state = await self.graph.ainvoke(initial_state)
-            
-            # Handle both dict and AgentState returns
+
             if isinstance(final_state, dict):
                 parsed_query = final_state.get("parsed_query", {})
                 analysis_plan = final_state.get("analysis_plan", [])
                 result = final_state.get("result", {})
+                node_timings = final_state.get("node_timings", {})
             else:
                 parsed_query = final_state.parsed_query
                 analysis_plan = final_state.analysis_plan
                 result = final_state.result
-            
+                node_timings = final_state.node_timings
+
+            workflow_steps = [
+                {
+                    "step": node,
+                    "label": NODE_META[node]["label"],
+                    "icon": NODE_META[node]["icon"],
+                    "status": "completed",
+                    "duration_ms": node_timings.get(node, 0),
+                }
+                for node in NODE_META
+            ]
+
             return {
                 "status": "success",
                 "parsed_query": parsed_query,
                 "analysis_plan": analysis_plan,
                 "result": result,
-                "workflow_steps": [
-                    "parse_query",
-                    "create_plan",
-                    "extract_data",
-                    "analyze_data",
-                    "generate_final_result"
-                ]
+                "workflow_steps": workflow_steps,
             }
         except Exception as e:
             logger.error(f"Query processing failed: {e}")
@@ -262,5 +283,6 @@ class CoordinatorAgent:
                 "error": str(e),
                 "parsed_query": {},
                 "analysis_plan": [],
-                "result": {}
+                "result": {},
+                "workflow_steps": [],
             }

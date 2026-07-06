@@ -6,6 +6,9 @@ import logging
 from typing import Dict, Any, List
 from services.llm_service import LLMService
 from agents.analytics.report_generator import ReportGenerator
+from agents.analytics.hdb_analytics import HDBAnalytics
+from agents.analytics.labour_analytics import LabourAnalytics
+from agents.analytics.crossdomain_analytics import CrossDomainAnalytics
 from agents.analytics.statistical_methods import (
     analyze_correlations,
     perform_statistical_analysis,
@@ -30,6 +33,18 @@ class AnalyticsAgent:
     def __init__(self):
         self.llm_service = LLMService()
         self.report_generator = ReportGenerator()
+        self.hdb_analytics = HDBAnalytics()
+        self.labour_analytics = LabourAnalytics()
+        self.crossdomain_analytics = CrossDomainAnalytics()
+
+    async def analyze_hdb_data(self, data: List[Dict], parsed_query: Dict) -> Dict[str, Any]:
+        return await self.hdb_analytics.analyze(data, parsed_query)
+
+    async def analyze_labour_market(self, data: List[Dict], parsed_query: Dict) -> Dict[str, Any]:
+        return await self.labour_analytics.analyze(data, parsed_query)
+
+    async def analyze_cross_domain(self, parsed_query: Dict) -> Dict[str, Any]:
+        return await self.crossdomain_analytics.analyze(parsed_query)
     
     async def analyze_employment_trends(self, data: List[Dict]) -> Dict[str, Any]:
         """Perform employment trend analysis"""
@@ -157,14 +172,14 @@ class AnalyticsAgent:
             Keep it concise (2-3 paragraphs maximum).
             """
             
-            from langchain.schema import HumanMessage, SystemMessage
+            from langchain_core.messages import HumanMessage, SystemMessage
             
             messages = [
                 SystemMessage(content="You are a friendly policy analyst who explains data insights in a conversational, easy-to-understand way."),
                 HumanMessage(content=prompt)
             ]
             
-            response = await self.llm_service.generate_response(messages)
+            response = await self.llm_service.generate_response(messages, mode="narrative")
             
             if response:
                 return response.strip()
@@ -211,14 +226,14 @@ When we break this down by sector - covering {', '.join(sectors)} - we can see t
             """
             
             # Use LLM service with fallback
-            from langchain.schema import HumanMessage, SystemMessage
+            from langchain_core.messages import HumanMessage, SystemMessage
             
             messages = [
                 SystemMessage(content="You are a policy data analyst providing insights to government decision makers."),
                 HumanMessage(content=prompt)
             ]
             
-            response = await self.llm_service.generate_response(messages)
+            response = await self.llm_service.generate_response(messages, mode="narrative")
             
             if response:
                 # Parse numbered list

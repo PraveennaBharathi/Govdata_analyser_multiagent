@@ -10,17 +10,17 @@ from models.database import get_db, init_db, Query
 from agents.coordinator_agent import CoordinatorAgent
 from api.background_tasks import process_query_background, get_task_status
 
-# Optional: Try to import Celery/WebSocket (graceful fallback)
+# Configure logging first
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Optional: Try to import WebSocket (graceful fallback)
 try:
     from api.websocket import websocket_task_updates, websocket_query_stream, websocket_system_status
     WEBSOCKET_AVAILABLE = True
 except ImportError:
     WEBSOCKET_AVAILABLE = False
     logger.warning("WebSocket features not available")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -224,6 +224,16 @@ async def get_query(query_id: int, db: Session = Depends(get_db)):
         "analysis_plan": query.result.get("analysis_plan", []) if query.result else [],
         "result": query.result
     }
+
+@app.get("/live-city")
+async def get_live_city() -> Dict[str, Any]:
+    """Real-time PSI air quality + 2-hour weather forecast (no API key required)."""
+    try:
+        from services.live_city_client import get_live_city_data
+        return get_live_city_data()
+    except Exception as e:
+        logger.error(f"Live city data error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # WebSocket Endpoints (if available)
 if WEBSOCKET_AVAILABLE:
