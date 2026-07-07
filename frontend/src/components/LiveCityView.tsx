@@ -62,17 +62,21 @@ function fmt(ts: string) {
 export function LiveCityView() {
   const [data, setData] = useState<LiveCityData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const res = await fetch(`${API_BASE}/live-city`)
+      if (!res.ok) throw new Error(`API error ${res.status}`)
       const json: LiveCityData = await res.json()
       setData(json)
       setLastRefresh(new Date())
     } catch (e) {
       console.error('Live city fetch failed', e)
+      setError(e instanceof Error ? e.message : 'Failed to load live city data')
     } finally {
       setLoading(false)
     }
@@ -89,6 +93,16 @@ export function LiveCityView() {
       <div className="flex items-center justify-center py-24 text-gray-400">
         <Loader2 className="h-8 w-8 animate-spin mr-3" />
         <span>Fetching live city data…</span>
+      </div>
+    )
+  }
+
+  if (error && !data) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-red-400 gap-3">
+        <p className="font-medium">Failed to load live city data</p>
+        <p className="text-sm text-gray-400">{error}</p>
+        <button onClick={fetchData} className="text-sm text-blue-500 underline">Retry</button>
       </div>
     )
   }

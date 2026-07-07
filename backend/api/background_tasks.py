@@ -13,7 +13,16 @@ logger = logging.getLogger(__name__)
 # In-memory task storage (for demo purposes)
 task_storage: Dict[str, Dict[str, Any]] = {}
 
-async def process_query_background(task_id: str, query_id: int, query_text: str):
+# Reuse a single coordinator across all background tasks — avoids re-initialising all LLM clients on every request
+_coordinator: CoordinatorAgent | None = None
+
+def _get_coordinator() -> CoordinatorAgent:
+    global _coordinator
+    if _coordinator is None:
+        _coordinator = CoordinatorAgent()
+    return _coordinator
+
+async def process_query_background(task_id: str, query_id: int, query_text: str, model_preference: str = "auto"):
     """
     Background task for processing queries without Celery
     """
@@ -28,7 +37,7 @@ async def process_query_background(task_id: str, query_id: int, query_text: str)
     }
     
     try:
-        coordinator = CoordinatorAgent()
+        coordinator = _get_coordinator()
         
         # Update progress: Parsing
         task_storage[task_id].update({
@@ -45,7 +54,7 @@ async def process_query_background(task_id: str, query_id: int, query_text: str)
         await asyncio.sleep(0.5)
         
         # Process query
-        result = await coordinator.process_query(query_text)
+        result = await coordinator.process_query(query_text, model_preference=model_preference)
         
         # Update progress: Analyzing
         task_storage[task_id].update({
@@ -64,6 +73,8 @@ async def process_query_background(task_id: str, query_id: int, query_text: str)
                 query_record.parsed_query = result.get('parsed_query')
                 query_record.completed_at = datetime.utcnow()
                 db.commit()
+            else:
+                logger.warning(f"Query record {query_id} not found — result not persisted to DB")
         finally:
             db.close()
         
@@ -89,6 +100,8 @@ async def process_query_background(task_id: str, query_id: int, query_text: str)
                 query_record.result = {'error': str(e)}
                 query_record.completed_at = datetime.utcnow()
                 db.commit()
+            else:
+                logger.warning(f"Query record {query_id} not found — failure not persisted to DB")
         finally:
             db.close()
         

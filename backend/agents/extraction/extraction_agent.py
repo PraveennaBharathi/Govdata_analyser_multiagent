@@ -125,7 +125,13 @@ class ExtractionAgent:
                 town = filters.get("town")
                 flat_type = filters.get("flat_type")
                 if town:
-                    mask = df["town"].str.upper() == town.upper()
+                    from agents.analytics.hdb_analytics import _SUBZONE_TO_TOWN
+                    t_upper = town.upper().strip()
+                    mask = df["town"].str.upper() == t_upper
+                    if not mask.any():
+                        remapped = _SUBZONE_TO_TOWN.get(t_upper)
+                        if remapped:
+                            mask = df["town"].str.upper() == remapped
                     if mask.any():
                         df = df[mask]
                 if flat_type:

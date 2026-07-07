@@ -15,11 +15,41 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Sub-areas / estates that are NOT standalone HDB towns → map to their parent town
+# (The 26 HDB towns in data.gov.sg resale data don't include sub-estate names)
+_SUBZONE_TO_TOWN: Dict[str, str] = {
+    "BOON LAY":        "JURONG WEST",
+    "BOONLAY":         "JURONG WEST",
+    "LAKESIDE":        "JURONG WEST",
+    "CHINESE GARDEN":  "JURONG WEST",
+    "PIONEER":         "JURONG WEST",
+    "PAYA LEBAR":      "GEYLANG",
+    "ALJUNIED":        "GEYLANG",
+    "KEMBANGAN":       "BEDOK",
+    "TANAH MERAH":     "BEDOK",
+    "CHAI CHEE":       "BEDOK",
+    "EUNOS":           "GEYLANG",
+    "MACPHERSON":      "GEYLANG",
+    "BRADDELL":        "TOA PAYOH",
+    "KIM KEAT":        "TOA PAYOH",
+    "LORONG 8 TOA PAYOH": "TOA PAYOH",
+    "SIMEI":           "TAMPINES",
+    "LOYANG":          "PASIR RIS",
+    "COMPASSVALE":     "SENGKANG",
+    "RIVERVALE":       "SENGKANG",
+    "ANCHORVALE":      "SENGKANG",
+    "FERNVALE":        "SENGKANG",
+    "BUANGKOK":        "HOUGANG",
+    "KOVAN":           "HOUGANG",
+    "UPP SERANGOON":   "HOUGANG",
+    "AMK":             "ANG MO KIO",
+}
+
 
 class HDBAnalytics:
     """Analytics for HDB resale flat price data."""
 
-    async def analyze(self, data: List[Dict], parsed_query: Dict) -> Dict[str, Any]:
+    async def analyze(self, data: List[Dict], parsed_query: Dict, forced_model: str = None) -> Dict[str, Any]:
         try:
             df = pd.DataFrame(data)
             if df.empty:
@@ -31,9 +61,26 @@ class HDBAnalytics:
             flat_filter = parsed_query.get("filters", {}).get("flat_type")
 
             if town_filter:
-                mask = df["town"].str.upper() == town_filter.upper()
+                t_upper = town_filter.upper().strip()
+                # Step 1: exact match
+                mask = df["town"].str.upper() == t_upper
+                # Step 2: space-normalised match (handles "BOONLAY" → "BOON LAY")
+                if not mask.any():
+                    t_nospace = t_upper.replace(" ", "")
+                    mask = df["town"].str.upper().str.replace(" ", "", regex=False) == t_nospace
+                # Step 3: sub-area remapping (estates not classified as standalone HDB towns)
+                if not mask.any():
+                    remapped = _SUBZONE_TO_TOWN.get(t_upper)
+                    if remapped:
+                        logger.info(f"Remapping '{t_upper}' → '{remapped}' (sub-area of HDB town)")
+                        mask = df["town"].str.upper() == remapped
+                        town_filter = remapped
                 if mask.any():
                     df = df[mask]
+                    town_filter = df["town"].iloc[0]
+                else:
+                    logger.warning(f"Town filter '{town_filter}' not found in data — showing all towns")
+                    town_filter = None
             if flat_filter:
                 mask = df["flat_type"].str.upper() == flat_filter.upper()
                 if mask.any():
@@ -88,9 +135,9 @@ Write in a warm, professional tone. Give direct numbers, then context."""
                 SystemMessage(content="You are a Singapore housing policy analyst."),
                 HumanMessage(content=prompt),
             ]
-            conversational = await llm.generate_response(messages, mode="narrative") or self._fallback_response(yearly, price_change_pct)
+            conversational = await llm.generate_response(messages, mode="narrative", forced_model=forced_model) or self._fallback_response(yearly, price_change_pct, town_filter, flat_filter, town_summary, flat_summary)
 
-            insights = await self._insights(llm, yearly, town_summary, flat_summary)
+            insights = await self._insights(llm, yearly, town_summary, flat_summary, forced_model=forced_model)
             chart = self._chart(yearly, town_summary)
             storey_summary = self._storey_summary(df)
             psm_summary = self._psm_summary(df)
@@ -183,12 +230,12 @@ Write in a warm, professional tone. Give direct numbers, then context."""
             merged = pd.DataFrame({"early": early, "recent": recent}).dropna()
             merged["momentum_pct"] = ((merged["recent"] - merged["early"]) / merged["early"] * 100).round(1)
             merged = merged.sort_values("momentum_pct", ascending=False).reset_index()
-            merged = merged.rename(columns={"town": "town", "early": "price_2020_22", "recent": "price_2023_25"})
+            merged = merged.rename(columns={"early": "price_2020_22", "recent": "price_2023_25"})
             return merged.head(10).to_dict("records")
         except Exception:
             return []
 
-    async def _insights(self, llm, yearly, town_summary, flat_summary) -> List[str]:
+    async def _insights(self, llm, yearly, town_summary, flat_summary, forced_model=None) -> List[str]:
         try:
             from langchain_core.messages import HumanMessage, SystemMessage
             prompt = f"""Generate 4 concise policy insights for Singapore housing decision-makers:
@@ -200,7 +247,7 @@ Return a numbered list, one insight per line."""
                 SystemMessage(content="You are a Singapore housing policy analyst."),
                 HumanMessage(content=prompt),
             ]
-            resp = await llm.generate_response(messages, mode="narrative")
+            resp = await llm.generate_response(messages, mode="narrative", forced_model=forced_model)
             if resp:
                 insights = []
                 for line in resp.split("\n"):
@@ -263,10 +310,60 @@ Return a numbered list, one insight per line."""
             pass
         return 0.0
 
-    def _fallback_response(self, yearly, price_change_pct) -> str:
-        latest = int(yearly.iloc[-1]["median_price"])
-        return (
-            f"HDB resale flat prices have changed by {price_change_pct:.1f}% over the period analysed. "
-            f"The current median resale price stands at SGD {latest:,}. "
-            f"Demand remains strong across most towns, with mature estates continuing to attract premium valuations."
-        )
+    def _fallback_response(self, yearly, price_change_pct, town_filter=None, flat_filter=None, town_summary=None, flat_summary=None) -> str:
+        start_year  = int(yearly.iloc[0]["year"])
+        end_year    = int(yearly.iloc[-1]["year"])
+        start_price = int(yearly.iloc[0]["median_price"])
+        latest      = int(yearly.iloc[-1]["median_price"])
+        total_tx    = int(yearly["transactions"].sum())
+
+        if town_filter and flat_filter:
+            subject = f"{flat_filter.title()} flats in {town_filter.title()}"
+        elif town_filter:
+            subject = f"HDB resale flats in **{town_filter.title()}**"
+        elif flat_filter:
+            subject = f"**{flat_filter.title()}** HDB resale flats"
+        else:
+            subject = "the Singapore HDB resale market"
+
+        parts = [
+            f"From {start_year} to {end_year}, {subject} recorded **{total_tx:,} transactions**. "
+            f"Median prices rose from **SGD {start_price:,}** to **SGD {latest:,}** — "
+            f"a **{price_change_pct:.1f}% increase** over the period."
+        ]
+
+        # Year-by-year highlights
+        if len(yearly) >= 2:
+            peak = yearly.loc[yearly["median_price"].idxmax()]
+            parts.append(
+                f"Prices peaked at **SGD {int(peak['median_price']):,}** in {int(peak['year'])}, "
+                f"with {int(peak['transactions']):,} transactions that year."
+            )
+
+        # Town breakdown (only when not already filtered to one town)
+        if town_summary is not None and not town_summary.empty and not town_filter:
+            top3    = town_summary.head(3)
+            bottom3 = town_summary.tail(3)
+            top_str = ", ".join(
+                f"{r['town'].title()} (SGD {int(r['median_price']):,})"
+                for _, r in top3.iterrows()
+            )
+            bot_str = ", ".join(
+                f"{r['town'].title()} (SGD {int(r['median_price']):,})"
+                for _, r in bottom3.iterrows()
+            )
+            parts.append(f"**Most expensive** towns in {end_year}: {top_str}.")
+            parts.append(f"**Most affordable** towns in {end_year}: {bot_str}.")
+
+        # Flat type breakdown (only when not filtered to one type)
+        if flat_summary is not None and not flat_summary.empty and not flat_filter:
+            top_flat = flat_summary.iloc[0]
+            bot_flat = flat_summary.iloc[-1]
+            parts.append(
+                f"**{top_flat['flat_type'].title()}** flats command the highest median at "
+                f"SGD {int(top_flat['median_price']):,}; "
+                f"**{bot_flat['flat_type'].title()}** flats are the most affordable at "
+                f"SGD {int(bot_flat['median_price']):,}."
+            )
+
+        return "\n\n".join(parts)

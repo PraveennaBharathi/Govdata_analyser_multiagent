@@ -39,7 +39,7 @@ EXCLUDE_COLS = {"dataset_type", "year", "period", "quarter", "_period",
 class LabourAnalytics:
     """Multi-dataset Singapore labour market analysis with composite health score."""
 
-    async def analyze(self, data: List[Dict], parsed_query: Dict) -> Dict[str, Any]:
+    async def analyze(self, data: List[Dict], parsed_query: Dict, forced_model: str = None) -> Dict[str, Any]:
         try:
             df = pd.DataFrame(data)
             if df.empty:
@@ -98,9 +98,9 @@ Use actual numbers from the data above. Do not use bullet points — flowing par
                 SystemMessage(content="You are a senior Singapore labour market economist."),
                 HumanMessage(content=prompt),
             ]
-            conversational = await llm.generate_response(messages, mode="narrative") or self._fallback_narrative(score_now, summary_rows)
+            conversational = await llm.generate_response(messages, mode="narrative", forced_model=forced_model) or self._fallback_narrative(score_now, summary_rows, yearly_metrics)
 
-            insights = await self._insights(llm, yearly_metrics, composite)
+            insights = await self._insights(llm, yearly_metrics, composite, forced_model=forced_model)
 
             from utils.json_utils import sanitize_for_json
             result = {
@@ -272,12 +272,18 @@ Use actual numbers from the data above. Do not use bullet points — flowing par
             logger.error(f"Labour chart failed: {e}")
             return ""
 
-    async def _insights(self, llm, yearly_metrics, composite) -> List[str]:
+    async def _insights(self, llm, yearly_metrics, composite, forced_model=None) -> List[str]:
         try:
             from langchain_core.messages import HumanMessage, SystemMessage
             comp = composite.get("composite", {})
             years = sorted(comp.keys())
-            trend = "improving" if len(years) >= 2 and comp[years[-1]] > comp[years[-3 if len(years) >= 3 else 0]] else "deteriorating"
+            if len(years) >= 3:
+                baseline = comp[years[-3]]
+            elif len(years) == 2:
+                baseline = comp[years[0]]
+            else:
+                baseline = comp[years[-1]]
+            trend = "improving" if comp[years[-1]] > baseline else "deteriorating"
 
             prompt = f"""Generate 4 specific, numbered policy insights for MOM about Singapore's labour market.
 Composite score trend: {trend} (latest: {comp.get(years[-1], 50):.0f}/100)
@@ -287,7 +293,7 @@ One insight per line. Be specific with implications. No bullet points — number
                 SystemMessage(content="You are a senior MOM labour economist."),
                 HumanMessage(content=prompt),
             ]
-            resp = await llm.generate_response(messages, mode="narrative")
+            resp = await llm.generate_response(messages, mode="narrative", forced_model=forced_model)
             if resp:
                 insights = []
                 for line in resp.split("\n"):
@@ -306,11 +312,56 @@ One insight per line. Be specific with implications. No bullet points — number
             "Composite score trajectory should inform timing of any workforce support programmes",
         ]
 
-    def _fallback_narrative(self, score: float, summary_rows: List[str]) -> str:
-        status = "healthy" if score >= 70 else "cautionary" if score >= 50 else "stressed"
-        return (
-            f"Singapore's labour market is currently in a {status} state with a composite health score "
-            f"of {score:.0f}/100. The score is derived from four live indicators tracked by MOM: "
-            f"unemployment rate, quarterly retrenchments, recruitment rate, and long-term unemployment.\n\n"
-            + "\n".join(summary_rows)
-        )
+    def _fallback_narrative(self, score: float, summary_rows: List[str], yearly_metrics: dict = None) -> str:
+        status = "**healthy**" if score >= 70 else "**cautionary**" if score >= 50 else "**stressed**"
+
+        parts = [
+            f"Singapore's labour market is currently in a {status} state with a composite health "
+            f"score of **{score:.0f}/100** (0 = stressed, 100 = healthy). "
+            f"This composite is derived from four live MOM indicators: unemployment rate, quarterly "
+            f"retrenchments, recruitment rate, and long-term unemployment."
+        ]
+
+        if summary_rows:
+            parts.append("**Current indicator values:**\n" + "\n".join(summary_rows))
+
+        # Year-specific highlights from actual data
+        if yearly_metrics:
+            highlights = []
+            unemp = yearly_metrics.get("unemployment")
+            rtrench = yearly_metrics.get("retrenchment")
+            recruit = yearly_metrics.get("recruitment")
+
+            if unemp is not None and not unemp.empty:
+                latest_u = unemp.loc[unemp["year"].idxmax()]
+                peak_u   = unemp.loc[unemp["value"].idxmax()]
+                highlights.append(
+                    f"Unemployment rate: **{latest_u['value']:.2f}%** (latest {int(latest_u['year'])}); "
+                    f"peaked at **{peak_u['value']:.2f}%** in {int(peak_u['year'])}."
+                )
+
+            if rtrench is not None and not rtrench.empty:
+                worst_r = rtrench.loc[rtrench["value"].idxmax()]
+                latest_r = rtrench.loc[rtrench["year"].idxmax()]
+                highlights.append(
+                    f"Retrenchments: highest in **{int(worst_r['year'])}** at ~{int(worst_r['value']):,}/quarter; "
+                    f"latest ({int(latest_r['year'])}): ~{int(latest_r['value']):,}/quarter."
+                )
+
+            if recruit is not None and not recruit.empty:
+                latest_rec = recruit.loc[recruit["year"].idxmax()]
+                highlights.append(
+                    f"Recruitment rate: **{latest_rec['value']:.2f}%** in {int(latest_rec['year'])}."
+                )
+
+            if highlights:
+                parts.append("**Key data points:**\n" + "\n".join(highlights))
+
+        if score >= 70:
+            parts.append("Overall, the market reflects sustained demand and structural resilience.")
+        elif score >= 50:
+            parts.append("Some indicators warrant continued monitoring — particularly retrenchment volumes and long-term unemployment trends.")
+        else:
+            parts.append("The stressed score signals significant headwinds requiring targeted workforce support and reskilling programmes.")
+
+        return "\n\n".join(parts)

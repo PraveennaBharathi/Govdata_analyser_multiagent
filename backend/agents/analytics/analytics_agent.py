@@ -37,14 +37,14 @@ class AnalyticsAgent:
         self.labour_analytics = LabourAnalytics()
         self.crossdomain_analytics = CrossDomainAnalytics()
 
-    async def analyze_hdb_data(self, data: List[Dict], parsed_query: Dict) -> Dict[str, Any]:
-        return await self.hdb_analytics.analyze(data, parsed_query)
+    async def analyze_hdb_data(self, data: List[Dict], parsed_query: Dict, forced_model: str = None) -> Dict[str, Any]:
+        return await self.hdb_analytics.analyze(data, parsed_query, forced_model=forced_model)
 
-    async def analyze_labour_market(self, data: List[Dict], parsed_query: Dict) -> Dict[str, Any]:
-        return await self.labour_analytics.analyze(data, parsed_query)
+    async def analyze_labour_market(self, data: List[Dict], parsed_query: Dict, forced_model: str = None) -> Dict[str, Any]:
+        return await self.labour_analytics.analyze(data, parsed_query, forced_model=forced_model)
 
-    async def analyze_cross_domain(self, parsed_query: Dict) -> Dict[str, Any]:
-        return await self.crossdomain_analytics.analyze(parsed_query)
+    async def analyze_cross_domain(self, parsed_query: Dict, forced_model: str = None) -> Dict[str, Any]:
+        return await self.crossdomain_analytics.analyze(parsed_query, forced_model=forced_model)
     
     async def analyze_employment_trends(self, data: List[Dict]) -> Dict[str, Any]:
         """Perform employment trend analysis"""

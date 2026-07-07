@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 class CrossDomainAnalytics:
 
-    async def analyze(self, parsed_query: Dict[str, Any]) -> Dict[str, Any]:
+    async def analyze(self, parsed_query: Dict[str, Any], forced_model: str = None) -> Dict[str, Any]:
         try:
             hdb_yearly, labour_yearly = await self._load_both_datasets()
             if hdb_yearly.empty or labour_yearly.empty:
@@ -39,8 +39,8 @@ class CrossDomainAnalytics:
             from langchain_core.messages import HumanMessage, SystemMessage
             llm = LLMService()
 
-            narrative = await self._magistral_narrative(llm, aligned, correlations, parsed_query)
-            insights  = await self._magistral_insights(llm, aligned, correlations)
+            narrative = await self._magistral_narrative(llm, aligned, correlations, parsed_query, forced_model=forced_model)
+            insights  = await self._magistral_insights(llm, aligned, correlations, forced_model=forced_model)
 
             years = sorted(aligned["year"].tolist())
             hdb_change = (
@@ -208,7 +208,7 @@ class CrossDomainAnalytics:
 
     # ── Magistral narrative ───────────────────────────────────────────────────
 
-    async def _magistral_narrative(self, llm, aligned, correlations, parsed_query) -> str:
+    async def _magistral_narrative(self, llm, aligned, correlations, parsed_query, forced_model=None) -> str:
         from langchain_core.messages import HumanMessage, SystemMessage
 
         rows = "\n".join(
@@ -249,12 +249,12 @@ Be direct, professional, cite actual numbers. No bullet points — flowing prose
             HumanMessage(content=prompt),
         ]
 
-        result = await llm.generate_response(messages, mode="reasoning")
+        result = await llm.generate_response(messages, mode="reasoning", forced_model=forced_model)
         return result or self._fallback_narrative(aligned, correlations)
 
     # ── Magistral insights ────────────────────────────────────────────────────
 
-    async def _magistral_insights(self, llm, aligned, correlations) -> List[str]:
+    async def _magistral_insights(self, llm, aligned, correlations, forced_model=None) -> List[str]:
         from langchain_core.messages import HumanMessage, SystemMessage
 
         pearson_r = correlations.get("hdb_vs_labour_score", 0)
@@ -271,7 +271,7 @@ Labour score change: {aligned.iloc[0]['labour_score']:.1f} → {aligned.iloc[-1]
             SystemMessage(content="You are a cross-domain Singapore policy economist."),
             HumanMessage(content=prompt),
         ]
-        resp = await llm.generate_response(messages, mode="reasoning")
+        resp = await llm.generate_response(messages, mode="reasoning", forced_model=forced_model)
         if resp:
             insights = []
             for line in resp.split("\n"):

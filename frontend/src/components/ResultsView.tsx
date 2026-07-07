@@ -1,4 +1,5 @@
 'use client'
+import ReactMarkdown from 'react-markdown'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -476,7 +477,7 @@ function CrossDomainResults({ a }: { a: CrossDomainAnalysis }) {
                     <th className="text-left py-2 font-semibold text-gray-600">Year</th>
                     <th className="text-right py-2 font-semibold text-gray-600">HDB Median</th>
                     <th className="text-right py-2 font-semibold text-gray-600">Labour Score</th>
-                    {a.correlation_data[0]?.unemployment_rate != null && (
+                    {a.correlation_data.every(r => r.unemployment_rate != null) && (
                       <th className="text-right py-2 font-semibold text-gray-600">Unemployment %</th>
                     )}
                   </tr>
@@ -497,8 +498,8 @@ function CrossDomainResults({ a }: { a: CrossDomainAnalysis }) {
                           {row.labour_score.toFixed(1)}
                         </span>
                       </td>
-                      {row.unemployment_rate != null && (
-                        <td className="py-2 text-right text-gray-600">{row.unemployment_rate?.toFixed(1)}%</td>
+                      {a.correlation_data.every(r => r.unemployment_rate != null) && (
+                        <td className="py-2 text-right text-gray-600">{row.unemployment_rate!.toFixed(1)}%</td>
                       )}
                     </tr>
                   ))}
@@ -549,10 +550,18 @@ export function ResultsView({ result, queryId, onExport }: ResultsViewProps) {
     )
   }
 
-  const { conversational_response, analysis } = result.result
+  const { conversational_response, analysis, query } = result.result
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Query banner */}
+      {query && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-100">
+          <span className="mt-0.5 flex-shrink-0 h-5 w-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold">Q</span>
+          <p className="text-sm text-blue-900 font-medium leading-snug">{query}</p>
+        </div>
+      )}
+
       {/* Narrative */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
@@ -573,10 +582,19 @@ export function ResultsView({ result, queryId, onExport }: ResultsViewProps) {
             </div>
           )}
         </div>
-        <div className="px-6 py-5">
-          <p className="text-gray-700 leading-relaxed whitespace-pre-wrap text-[15px]">
+        <div className="px-6 py-5 prose prose-sm prose-gray max-w-none text-[15px]">
+          <ReactMarkdown
+            components={{
+              p: ({ children }) => <p className="text-gray-700 leading-relaxed mb-3 last:mb-0">{children}</p>,
+              strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+              em: ({ children }) => <em className="text-gray-700">{children}</em>,
+              ul: ({ children }) => <ul className="list-disc pl-5 space-y-1 text-gray-700">{children}</ul>,
+              ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1 text-gray-700">{children}</ol>,
+              li: ({ children }) => <li className="text-gray-700">{children}</li>,
+            }}
+          >
             {conversational_response}
-          </p>
+          </ReactMarkdown>
         </div>
       </div>
 

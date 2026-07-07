@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 class AgentState(BaseModel):
     """State for agent coordination"""
     user_query: str
+    model_preference: str = "auto"
     parsed_query: Dict[str, Any] = {}
     analysis_plan: List[str] = []
     current_step: str = ""
@@ -57,8 +58,9 @@ class CoordinatorAgent:
         t0 = time.time()
         logger.info(f"Parsing query: {state.user_query}")
 
+        forced = state.model_preference if state.model_preference != "auto" else None
         try:
-            parsed = await self.llm_service.parse_query(state.user_query)
+            parsed = await self.llm_service.parse_query(state.user_query, forced_model=forced)
             state.parsed_query = parsed
             state.current_step = "query_parsed"
             logger.info(f"Query parsed: {parsed}")
@@ -106,7 +108,8 @@ class CoordinatorAgent:
 
         try:
             if domain == "housing":
-                result = self.extraction_agent.load_hdb_data(filters=filters)
+                import asyncio
+                result = await asyncio.to_thread(self.extraction_agent.load_hdb_data, filters)
             elif domain == "cross_domain":
                 # Cross-domain analytics handles its own extraction internally
                 state.extracted_data = []
@@ -115,8 +118,8 @@ class CoordinatorAgent:
                 state.node_timings["extract_data"] = round((time.time() - t0) * 1000)
                 return state
             else:
-                # All labour / unknown queries use the composite live dataset
-                result = self.extraction_agent.load_labour_market_data()
+                import asyncio
+                result = await asyncio.to_thread(self.extraction_agent.load_labour_market_data)
 
             if result["status"] == "success":
                 state.extracted_data = result["data"]
@@ -153,18 +156,44 @@ class CoordinatorAgent:
             state.node_timings["analyze_data"] = round((time.time() - t0) * 1000)
             return state
 
+        forced = state.model_preference if state.model_preference != "auto" else None
         try:
+            _IMPLEMENTED = {"housing", "labour", "cross_domain"}
             if domain == "housing":
                 analysis_result = await self.analytics_agent.analyze_hdb_data(
-                    state.extracted_data, state.parsed_query
+                    state.extracted_data, state.parsed_query, forced_model=forced
                 )
             elif domain == "cross_domain":
                 parsed_with_query = {**state.parsed_query, "user_query": state.user_query}
-                analysis_result = await self.analytics_agent.analyze_cross_domain(parsed_with_query)
-            else:
+                analysis_result = await self.analytics_agent.analyze_cross_domain(parsed_with_query, forced_model=forced)
+            elif domain == "labour":
                 analysis_result = await self.analytics_agent.analyze_labour_market(
-                    state.extracted_data, state.parsed_query
+                    state.extracted_data, state.parsed_query, forced_model=forced
                 )
+            else:
+                # Domain recognised but analytics not yet built
+                _DOMAIN_LABELS = {
+                    "environment":  "Environment (PSI / Dengue)",
+                    "transport":    "Transport (MRT Ridership)",
+                    "business":     "Business (ACRA / COE)",
+                    "demographics": "Demographics (Population)",
+                }
+                label = _DOMAIN_LABELS.get(domain, domain.title())
+                analysis_result = {
+                    "status": "not_implemented",
+                    "domain": domain,
+                    "conversational_response": (
+                        f"**{label} analytics is coming soon.**\n\n"
+                        f"This domain has been correctly identified from your query, but the analytics "
+                        f"pipeline for **{label}** is not yet built. Currently supported domains are: "
+                        f"**Housing** (HDB resale), **Labour Market** (MOM indicators), and **Cross-Domain** "
+                        f"(housing + labour correlation).\n\n"
+                        f"For live PSI and weather data, check the **Live City** tab."
+                    ),
+                    "insights": [],
+                    "chart": "",
+                    "summary_statistics": {},
+                }
 
             state.analysis_result = analysis_result
             state.current_step = "analysis_completed"
@@ -209,6 +238,7 @@ class CoordinatorAgent:
         
         state.result = {
             "query": state.user_query,
+            "model_preference": state.model_preference,
             "conversational_response": conversational_response,
             "parsed_query": state.parsed_query,
             "analysis_plan": state.analysis_plan,
@@ -228,11 +258,11 @@ class CoordinatorAgent:
 
         return state
     
-    async def process_query(self, user_query: str) -> Dict[str, Any]:
+    async def process_query(self, user_query: str, model_preference: str = "auto") -> Dict[str, Any]:
         """Process user query through the agent workflow"""
-        logger.info(f"Processing query: {user_query}")
+        logger.info(f"Processing query: {user_query} [model={model_preference}]")
 
-        initial_state = AgentState(user_query=user_query)
+        initial_state = AgentState(user_query=user_query, model_preference=model_preference)
 
         NODE_META = {
             "parse_query":            {"label": "Parse Query",           "icon": "brain"},
@@ -261,7 +291,7 @@ class CoordinatorAgent:
                     "step": node,
                     "label": NODE_META[node]["label"],
                     "icon": NODE_META[node]["icon"],
-                    "status": "completed",
+                    "status": "completed" if node in node_timings else "failed",
                     "duration_ms": node_timings.get(node, 0),
                 }
                 for node in NODE_META
@@ -269,6 +299,7 @@ class CoordinatorAgent:
 
             return {
                 "status": "success",
+                "model_preference": model_preference,
                 "parsed_query": parsed_query,
                 "analysis_plan": analysis_plan,
                 "result": result,

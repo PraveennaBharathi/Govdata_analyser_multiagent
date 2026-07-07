@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 interface AgentMonitorProps {
   taskStatus?: TaskStatus
   workflowSteps?: WorkflowStep[]
+  modelPreference?: string
 }
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -23,7 +24,16 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
-export function AgentMonitor({ taskStatus, workflowSteps }: AgentMonitorProps) {
+const MODEL_LABELS: Record<string, string> = {
+  'auto':          'Auto (3-tier)',
+  'ollama':        'Ollama · qwen2.5:14b',
+  'mistral-small': 'Mistral Small',
+  'mistral-large': 'Mistral Large',
+  'magistral':     'Magistral (CoT)',
+  'gemini':        'Google Gemini',
+}
+
+export function AgentMonitor({ taskStatus, workflowSteps, modelPreference }: AgentMonitorProps) {
   const allSteps = workflowSteps || []
   // Hide steps that completed with 0ms — internal overhead not meaningful to show
   const steps = allSteps.filter(s => s.status !== 'completed' || (s.duration_ms ?? 0) > 0)
@@ -172,9 +182,18 @@ export function AgentMonitor({ taskStatus, workflowSteps }: AgentMonitorProps) {
         )}
 
         {/* LLM disclaimer */}
-        <p className="text-xs text-gray-400 leading-relaxed pt-1 border-t border-gray-100">
-          Powered by Ollama qwen2.5:14b (local) · Mistral API (primary) · Google Gemini (fallback)
-        </p>
+        <div className="pt-1 border-t border-gray-100 space-y-1">
+          {modelPreference && modelPreference !== 'auto' ? (
+            <p className="text-xs font-medium text-blue-600">
+              Model: {MODEL_LABELS[modelPreference] ?? modelPreference}
+            </p>
+          ) : null}
+          <p className="text-xs text-gray-400 leading-relaxed">
+            {modelPreference && modelPreference !== 'auto'
+              ? 'Forced — falls back to 3-tier if unavailable'
+              : 'Ollama qwen2.5:14b · Mistral API · Google Gemini'}
+          </p>
+        </div>
       </CardContent>
     </Card>
   )

@@ -125,7 +125,8 @@ export interface CrossDomainAnalysis {
 export type DomainAnalysis = HDBAnalysis | LabourAnalysis | CrossDomainAnalysis
 
 export interface ResultPayload {
-  query: string
+  query?: string
+  model_preference?: string
   conversational_response: string
   parsed_query: Record<string, unknown>
   analysis_plan: string[]
@@ -143,6 +144,7 @@ export interface ResultPayload {
 
 export interface QueryResult {
   status: string
+  model_preference?: string
   parsed_query?: Record<string, unknown>
   analysis_plan?: string[]
   result?: ResultPayload

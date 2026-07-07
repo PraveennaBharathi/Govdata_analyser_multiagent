@@ -12,9 +12,22 @@ import { downloadBlob } from '@/lib/utils'
 import { TaskStatus, QueryResult } from '@/types'
 import {
   Sparkles, Home as HomeIcon, Briefcase, Train, Building2, Users,
-  Wind, GraduationCap, Network, ChevronRight, Clock, Loader2
+  Wind, GraduationCap, Network, ChevronRight, Clock, Loader2, Cpu
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// ── Model config ──────────────────────────────────────────────────────────────
+
+const MODELS = [
+  { id: 'auto',          label: 'Auto',          sub: '3-tier routing' },
+  { id: 'ollama',        label: 'Ollama',         sub: 'Local · qwen2.5' },
+  { id: 'mistral-small', label: 'Mistral Small',  sub: 'Fast · routing' },
+  { id: 'mistral-large', label: 'Mistral Large',  sub: 'Quality · narrative' },
+  { id: 'magistral',     label: 'Magistral',      sub: 'Reasoning · CoT' },
+  { id: 'gemini',        label: 'Gemini',         sub: 'Google · fallback' },
+] as const
+
+type ModelId = typeof MODELS[number]['id']
 
 // ── Domain config ─────────────────────────────────────────────────────────────
 
@@ -254,7 +267,9 @@ function ComingSoon({ domain }: { domain: Domain }) {
 
 export default function Home() {
   const [activeDomain, setActiveDomain] = useState<DomainId>('housing')
+  const [selectedModel, setSelectedModel] = useState<ModelId>('ollama')
   const [isLoading, setIsLoading] = useState(false)
+  const [queryError, setQueryError] = useState<string>()
   const [taskStatus, setTaskStatus] = useState<TaskStatus>()
   const [result, setResult] = useState<QueryResult>()
   const [queryId, setQueryId] = useState<number>()
@@ -272,9 +287,10 @@ export default function Home() {
     setIsLoading(true)
     setTaskStatus(undefined)
     setResult(undefined)
+    setQueryError(undefined)
 
     try {
-      const response = await apiClient.submitQueryAsync(query)
+      const response = await apiClient.submitQueryAsync(query, selectedModel)
       setQueryId(response.query_id)
 
       await apiClient.pollTaskStatus(
@@ -284,12 +300,16 @@ export default function Home() {
           if (status.state === 'SUCCESS' && status.result) {
             setResult(status.result)
           }
+          if (status.state === 'FAILURE') {
+            setQueryError(status.error ?? 'Analysis failed — check backend logs')
+          }
         },
         2000,
         60
       )
     } catch (error) {
       console.error('Query error:', error)
+      setQueryError(error instanceof Error ? error.message : 'Unexpected error — please try again')
     } finally {
       setIsLoading(false)
     }
@@ -324,9 +344,27 @@ export default function Home() {
             </span>
           )}
           <div className="flex-1" />
-          <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
-            Ollama · Mistral · Gemini
-          </span>
+          {/* Model selector */}
+          <div className="flex items-center gap-2">
+            <Cpu className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value as ModelId)}
+              disabled={isLoading}
+              className={cn(
+                "text-xs border border-slate-200 rounded-lg bg-white px-2.5 py-1",
+                "text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400",
+                "cursor-pointer transition-colors hover:border-slate-300",
+                isLoading && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label} — {m.sub}
+                </option>
+              ))}
+            </select>
+          </div>
         </header>
 
         <main className="flex-1 p-6">
@@ -346,6 +384,14 @@ export default function Home() {
                 placeholder={domain.placeholder}
               />
 
+              {/* Error banner */}
+              {queryError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
+                  <span className="font-semibold flex-shrink-0">Error:</span>
+                  <span>{queryError}</span>
+                </div>
+              )}
+
               {/* Results area */}
               {(isLoading || result) && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -353,6 +399,7 @@ export default function Home() {
                     <AgentMonitor
                       taskStatus={taskStatus}
                       workflowSteps={result?.workflow_steps}
+                      modelPreference={result?.model_preference ?? selectedModel}
                     />
                   </div>
                   <div className="lg:col-span-2">

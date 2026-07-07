@@ -82,9 +82,10 @@ async def process_query(
         user_query = request.get("query", "")
         if not user_query:
             raise HTTPException(status_code=400, detail="Query is required")
-        
-        logger.info(f"Processing query: {user_query}")
-        
+        model_preference = request.get("model", "auto")
+
+        logger.info(f"Processing query: {user_query} [model={model_preference}]")
+
         # Save query to database
         db_query = Query(
             user_query=user_query,
@@ -94,9 +95,9 @@ async def process_query(
         db.add(db_query)
         db.commit()
         db.refresh(db_query)
-        
+
         # Process through coordinator agent
-        result = await coordinator.process_query(user_query)
+        result = await coordinator.process_query(user_query, model_preference=model_preference)
         
         # Update database with results
         db_query.parsed_query = result.get("parsed_query", {})
@@ -138,9 +139,10 @@ async def process_query_async(
         user_query = request.get("query", "")
         if not user_query:
             raise HTTPException(status_code=400, detail="Query is required")
-        
-        logger.info(f"Queuing async query: {user_query}")
-        
+        model_preference = request.get("model", "auto")
+
+        logger.info(f"Queuing async query: {user_query} [model={model_preference}]")
+
         # Save query to database
         db_query = Query(
             user_query=user_query,
@@ -150,16 +152,17 @@ async def process_query_async(
         db.add(db_query)
         db.commit()
         db.refresh(db_query)
-        
+
         # Generate task ID
         task_id = str(uuid.uuid4())
-        
+
         # Queue background task
         background_tasks.add_task(
             process_query_background,
             task_id,
             db_query.id,
-            user_query
+            user_query,
+            model_preference
         )
         
         return {
